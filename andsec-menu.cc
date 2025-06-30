@@ -13,7 +13,7 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 
-#include "ipc.h"
+#include "common.h"
 
 
 typedef struct
@@ -26,7 +26,6 @@ static gboolean     andsec_language_is_chinese  (void);
 static gboolean     andsec_language_is_english  (void);
 static const char*  andsec_translate            (const char* str);
 static void         andsec_files_execute_cmd    (const QStringList& files, gboolean enc);
-static void         send_data_to_daemon         (IpcServerType type, short isCN, char* files, unsigned int dataLen);
 
 static const AndsecLanguage gsChinese[] = {
     { "Andsec", "安得卫士" },
@@ -95,38 +94,43 @@ QList<QAction*> AndsecMenu::menuActions(Types types, const QString & uri, const 
         return l;
     }
 
-    const auto menu = new QMenu();
-    const auto action = new QAction();
-    {
-        {
-            const auto a = new QAction();
-            a->setText(andsec_translate("Manual encryption"));
-            menu->addAction(a);
-            connect(a, &QAction::triggered, this, [=] (bool) {
-                QStringList files;
-                for (const auto& u: selectionUris) {
-                    files << QUrl(u).path();
-                }
-                andsec_files_execute_cmd(files, true);
-            });
-        }
+    bool e = get_mouse_manual_encrypt();
+    bool d = get_privileged_decrypt();
 
+    if (e || d) {
+        const auto menu = new QMenu();
+        const auto action = new QAction();
         {
-            const auto a = new QAction();
-            a->setText(andsec_translate("Privileged decryption"));
-            menu->addAction(a);
-            connect(a, &QAction::triggered, this, [=] (bool) {
-                QStringList files;
-                for (const auto& u: selectionUris) {
-                    files << QUrl(u).path();
-                }
-                andsec_files_execute_cmd(files, false);
-            });
+            if (e) {
+                const auto a = new QAction();
+                a->setText(andsec_translate("Manual encryption"));
+                menu->addAction(a);
+                connect(a, &QAction::triggered, this, [=] (bool) {
+                    QStringList files;
+                    for (const auto& u: selectionUris) {
+                        files << QUrl(u).path();
+                    }
+                    andsec_files_execute_cmd(files, true);
+                });
+            }
+
+            if (d) {
+                const auto a = new QAction();
+                a->setText(andsec_translate("Privileged decryption"));
+                menu->addAction(a);
+                connect(a, &QAction::triggered, this, [=] (bool) {
+                    QStringList files;
+                    for (const auto& u: selectionUris) {
+                        files << QUrl(u).path();
+                    }
+                    andsec_files_execute_cmd(files, false);
+                });
+            }
         }
+        action->setText(andsec_translate("Andsec"));
+        action->setMenu(menu);
+        l << action;
     }
-    action->setText(andsec_translate("Andsec"));
-    action->setMenu(menu);
-    l << action;
 
     return l;
 }
@@ -172,54 +176,3 @@ static void andsec_files_execute_cmd(const QStringList& files, gboolean enc)
     send_data_to_daemon((enc ? IPC_TYPE_PRIVILEGED_ENCRYPT_FILES_SYNC : IPC_TYPE_PRIVILEGED_DECRYPT_FILES_SYNC), andsec_language_is_chinese(), allFiles.toUtf8().data(), allFiles.toUtf8().size());
 }
 
-void send_data_to_daemon(IpcServerType type, short isCN, char* files, unsigned int dataLen)
-{
-    int val = 1;
-    int sockFd = 0;
-    int timeout = 2000;
-    int revTimeout = 31 * 1000;
-    struct sockaddr_un address;
-
-    if ((sockFd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
-        printf("socket() failed\n");
-        return;
-    }
-
-    setsockopt(sockFd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-    setsockopt(sockFd, SOL_SOCKET, SO_RCVTIMEO, &revTimeout, sizeof(revTimeout));
-    setsockopt(sockFd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
-
-    memset(&address, 0, sizeof(struct sockaddr_un));
-    address.sun_family = AF_UNIX;
-    snprintf(address.sun_path, 108, IPC_SERVER_SOCKET_PATH);
-    const int len = sizeof(address);
-
-    if (0 != connect(sockFd, reinterpret_cast<struct sockaddr*>(&address), len)) {
-        printf("connect error\n");
-        return;
-    }
-
-    struct IpcMessage msgBuf = {};
-    struct PrivilegedDecAndEncData data = {};
-
-    data.isCN = isCN;
-    data.isPierec = 0;
-    data.filesLen = dataLen;
-
-    msgBuf.type = type;
-    msgBuf.dataLen = sizeof(data) + dataLen + 1;
-
-    const int allLen = dataLen + sizeof(data) + sizeof(msgBuf);
-    auto sendBuf = static_cast<char*>(malloc(allLen));
-    if (sendBuf) {
-        memset(sendBuf, 0, allLen);
-        memcpy(sendBuf, &msgBuf, sizeof(msgBuf));
-        memcpy(sendBuf + sizeof(msgBuf), &data, sizeof(data));
-        memcpy(sendBuf + sizeof(msgBuf) + sizeof(data), files, dataLen);
-        write(sockFd, sendBuf, allLen);
-        free(sendBuf);
-        sendBuf = nullptr;
-    }
-
-    close(sockFd);
-}

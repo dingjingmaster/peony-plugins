@@ -13,6 +13,7 @@ set(PROJECT_VERSION_PATCH 0)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+#set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
 
 add_definitions(
         -w -g
@@ -46,12 +47,14 @@ MESSAGE(STATUS "OS release      : '${RELEASE}'")
 MESSAGE(STATUS "Qt Version      : '${CUR_QT_VERSION}'")
 MESSAGE("")
 
-add_library(andsec-menu SHARED andsec-menu.cc andsec-menu.h)
+add_library(andsec-menu SHARED andsec-menu.cc andsec-menu.h common.cc common.h)
 target_link_libraries(andsec-menu PUBLIC ${QT5_LIBRARIES})
 target_include_directories(andsec-menu PUBLIC ${QT5_INCLUDE_DIRS} /data/code/kylin/include)
 set_target_properties(andsec-menu PROPERTIES PREFIX "")
+target_compile_options(andsec-menu PUBLIC -Wl,--no-undefined -Wl,-rpath=/usr/local/andsec/lib)
 
-add_library(andsec-emblem SHARED andsec-emblem.cc andsec-emblem.h)
+add_library(andsec-emblem SHARED andsec-emblem.cc andsec-emblem.h common.cc common.h)
 target_link_libraries(andsec-emblem PUBLIC ${QT5_LIBRARIES})
 target_include_directories(andsec-emblem PUBLIC ${QT5_INCLUDE_DIRS} /data/code/kylin/include)
 set_target_properties(andsec-emblem PROPERTIES PREFIX "")
+target_compile_options(andsec-emblem PUBLIC -Wl,--no-undefined -Wl,-rpath=/usr/local/andsec/lib)

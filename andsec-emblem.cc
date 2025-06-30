@@ -6,12 +6,12 @@
 
 #include <QUrl>
 
-extern int MonIsEncryptFile (const char* pFileName);
+#include "common.h"
 
 QStringList EmblemProvider::getFileEmblemIcons(const QString& uri)
 {
     printf("%s\n", uri.toStdString().c_str());
-    if (MonIsEncryptFile(QUrl(uri).path().toUtf8().data())) {
+    if (check_is_encrypt_file(QUrl(uri).path().toUtf8().data())) {
         return QStringList() << "andsec_lock";
     }
 
